@@ -1,6 +1,11 @@
 #include <ESP8266WiFi.h>
 #include "Adafruit_MQTT.h"
 #include "Adafruit_MQTT_Client.h"
+#include <ArduinoJson.h>
+#include "dht.h"
+#include <stdio.h>
+#include <Time.h>
+//#include <TimeLib.h>
 
 /************************* WiFi Access Point *********************************/
 
@@ -28,9 +33,13 @@ Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT,AIO_CLIENTID, AIO_
 
 /****************************** Feeds ***************************************/
 
-// Setup a feed called 'potValue' for publishing.
-// Notice MQTT paths for AIO follow the form: <username>/feeds/<feedname>
-Adafruit_MQTT_Publish potValue = Adafruit_MQTT_Publish(&mqtt, AIO_USERNAME "/feeds/potValue");
+#define NODE_ID "DH11NODE"
+
+#define PUBLISH_TEMPERATURE_DATA   "things/" NODE_ID "/testthing/data" 
+#define PUBLISH_HUMIDITY_DATA   "things/" NODE_ID "/testthing/data"
+
+Adafruit_MQTT_Publish publishData = Adafruit_MQTT_Publish(&mqtt, PUBLISH_HUMIDITY_DATA, MQTT_QOS_1);
+
 
 // Setup a feed called 'ledBrightness' for subscribing to changes.
 Adafruit_MQTT_Subscribe ledBrightness = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/ledBrightness");
@@ -39,11 +48,12 @@ Adafruit_MQTT_Subscribe ledBrightness = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERN
 
 // Bug workaround for Arduino 1.6.6, it seems to need a function declaration
 // for some reason (only affects ESP8266, likely an arduino-builder bug).
+
+#define dht_apin D0 
+
 void MQTT_connect();
 
-uint8_t ledPin = D6;
-uint16_t potAdcValue = 0;
-uint16_t ledBrightValue = 0;
+dht DHT;
 
 void setup() {
   Serial.begin(9600);
@@ -66,42 +76,36 @@ void setup() {
   Serial.println("WiFi connected");
   Serial.println("IP address: "); Serial.println(WiFi.localIP());
 
-  // Setup MQTT subscription for ledBrightness feed.
-  //mqtt.subscribe(&ledBrightness);
+  delay(1000);
 }
 
 void loop() {
-  // Ensure the connection to the MQTT server is alive (this will make the first
-  // connection and automatically reconnect when disconnected).  See the MQTT_connect
-  // function definition further below.
+  
   MQTT_connect();
 
-  // this is our 'wait for incoming subscription packets' busy subloop
-  // try to spend your time here
-/*
-  Adafruit_MQTT_Subscribe *subscription;
-  while ((subscription = mqtt.readSubscription(200))) {
-    if (subscription == &ledBrightness) {
-      Serial.print(F("Got LED Brightness : "));
-      ledBrightValue = atoi((char *)ledBrightness.lastread);
-      Serial.println(ledBrightValue);
-      analogWrite(ledPin, ledBrightValue);
-    }
-  }
+  DHT.read11(dht_apin);
+  
+  Serial.print("Current humidity = ");
+ 
+  Serial.print(DHT.humidity);
 
-  // Now we can publish stuff!
-  uint16_t AdcValue = analogRead(A0);
-  if((AdcValue > (potAdcValue + 7)) || (AdcValue < (potAdcValue - 7))){
-    potAdcValue = AdcValue;
-    Serial.print(F("Sending pot val "));
-    Serial.print(potAdcValue);
-    Serial.print("...");
-    if (! potValue.publish(potAdcValue)) {
-      Serial.println(F("Failed"));
-    } else {
-      Serial.println(F("OK!"));
-    }
-  }*/
+  Serial.print("%  ");
+
+  Serial.print("temperature = ");
+
+  Serial.print(DHT.temperature); 
+
+  Serial.println("C  ");
+
+  char data[100];
+  sprintf(data, "Humidity: %.2f, Tempereture: %.2f", DHT.humidity, DHT.temperature);
+
+  humData.publish(data);
+  
+
+  delay(5000);
+
+  
   // ping the server to keep the mqtt connection alive
   // NOT required if you are publishing once every KEEPALIVE seconds
   /*
@@ -110,6 +114,7 @@ void loop() {
   }
   */
 }
+
 
 // Function to connect and reconnect as necessary to the MQTT server.
 // Should be called in the loop function and it will take care if connecting.
@@ -137,3 +142,4 @@ void MQTT_connect() {
   }
   Serial.println("MQTT Connected!");
 }
+
