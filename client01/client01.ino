@@ -5,7 +5,7 @@ ESP8266WiFiMulti WiFiMulti;
 
 const char* ssid     = "ARDIC_GUEST";      // SSID
 const char* password = "w1Cm2ardC";      // Password
-const char* host = "192,168,2,10";
+const char* host = "192.168.2.10";
 const uint16_t port = 9877;
 
 void setup() {
@@ -61,27 +61,5 @@ void loop() {
     
     Serial.println("wait 5 sec...");
     delay(5000);
-/*
-    Serial.println("[connected]");
 
-    Serial.println("[Sending a request]");
-    client.print(String("GET /") + " HTTP/1.1\r\n" +
-                 "Host: " + host + "\r\n" +
-                 "Connection: close\r\n" +
-                 "\r\n"
-                );
-
-    Serial.println("[Response:]");
-    while (client.connected())
-    {
-      if (client.available())
-      {
-        String line = client.readStringUntil('\n');
-        Serial.println(line);
-      }
-    }
-    client.stop();
-    Serial.println("\n[Disconnected]");
-  */
-  delay(5000);
 }
