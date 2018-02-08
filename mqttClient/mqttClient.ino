@@ -100,7 +100,7 @@ void loop() {
   char data[100];
   sprintf(data, "Humidity: %.2f, Tempereture: %.2f", DHT.humidity, DHT.temperature);
 
-  humData.publish(data);
+  publishData.publish(data);
   
 
   delay(5000);
