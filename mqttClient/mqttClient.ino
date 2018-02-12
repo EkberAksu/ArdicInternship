@@ -7,6 +7,7 @@
 #include <time.h>
 #include <ESP8266mDNS.h>
 #include "mdns.h"
+#include <stdlib.h>
 
 /************************* WiFi Access Point *********************************/
 
@@ -26,6 +27,8 @@ char AIO_SERVER[100] =  {0};
 
 // Create an ESP8266 WiFiClient class to connect to the MQTT server.
 WiFiClient client;
+// or... use WiFiFlientSecure for SSL
+//WiFiClientSecure client;
 
 // Setup the MQTT client class by passing in the WiFi client and MQTT server and login details.
 Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_CLIENTID, AIO_USERNAME, AIO_KEY);
@@ -37,11 +40,12 @@ Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_CLIENTID, AIO
 #define PUBLISH_TEMPERATURE_DATA   "things/" NODE_ID "/testthing/data"
 #define PUBLISH_HUMIDITY_DATA   "things/" NODE_ID "/testthing/data"
 
+#define SUBSCRIBE_HUMIDITY_DATA   "things/" NODE_ID "/testthing/config"
+
 Adafruit_MQTT_Publish publishData = Adafruit_MQTT_Publish(&mqtt, PUBLISH_HUMIDITY_DATA, MQTT_QOS_1);
 
 
-// Setup a feed called 'ledBrightness' for subscribing to changes.
-Adafruit_MQTT_Subscribe ledBrightness = Adafruit_MQTT_Subscribe(&mqtt, AIO_USERNAME "/feeds/ledBrightness");
+Adafruit_MQTT_Subscribe configData = Adafruit_MQTT_Subscribe(&mqtt, SUBSCRIBE_HUMIDITY_DATA, MQTT_QOS_1);
 
 /****************************************************************************/
 
@@ -59,9 +63,13 @@ String hosts[MAX_HOSTS][4];  // Array containing information about hosts receive
 
 
 // When an mDNS packet gets parsed this callback gets called once per Query.
+// See mdns.h for definition of mdns::Query.
 void answerCallback(const mdns::Answer* answer) {
 
   // A typical PTR record matches service to a human readable name.
+  // eg:
+  //  service: _mqtt._tcp.local
+  //  name:    Mosquitto MQTT server on twinkle.local
   if (answer->rrtype == MDNS_TYPE_PTR and strstr(answer->name_buffer, QUESTION_SERVICE) != 0) {
     unsigned int i = 0;
     for (; i < MAX_HOSTS; ++i) {
@@ -88,11 +96,15 @@ void answerCallback(const mdns::Answer* answer) {
   }
 
   // A typical SRV record matches a human readable name to port and FQDN info.
+  // eg:
+  //  name:    Mosquitto MQTT server on twinkle.local
+  //  data:    p=0;w=0;port=1883;host=twinkle.local
   if (answer->rrtype == MDNS_TYPE_SRV) {
     unsigned int i = 0;
     for (; i < MAX_HOSTS; ++i) {
       if (hosts[i][HOSTS_SERVICE_NAME] == answer->name_buffer) {
-        
+        // This hosts entry matches the name of the host we are looking for
+        // so parse data for port and hostname.
         char* port_start = strstr(answer->rdata_buffer, "port=");
         if (port_start) {
           port_start += 5;
@@ -116,7 +128,9 @@ void answerCallback(const mdns::Answer* answer) {
   }
 
   // A typical A record matches an FQDN to network ipv4 address.
-  
+  // eg:
+  //   name:    twinkle.local
+  //   address: 192.168.192.9
   if (answer->rrtype == MDNS_TYPE_A) {
     for (int i = 0; i < MAX_HOSTS; ++i) {
       if (hosts[i][HOSTS_HOST_NAME] == answer->name_buffer) {
@@ -127,7 +141,6 @@ void answerCallback(const mdns::Answer* answer) {
     }
   }
 
-  Serial.println(MAX_HOSTS);
   for (int i = 0; i < MAX_HOSTS; ++i) {
     if (hosts[i][HOSTS_SERVICE_NAME] != "") {
       Serial.print(">  ");
@@ -181,7 +194,7 @@ void setup() {
   Serial.println("WiFi connected");
   Serial.println("IP address: "); Serial.println(WiFi.localIP());
 
-  // Query for all host information for a paticular service. ("_mqtt" in this case.)
+  // Query for all host information for a paticular service.
   my_mdns.Clear();
   struct mdns::Query query_mqtt;
   strncpy(query_mqtt.qname_buffer, QUESTION_SERVICE, MAX_MDNS_NAME_LEN);
@@ -191,16 +204,20 @@ void setup() {
   my_mdns.AddQuery(query_mqtt);
   my_mdns.Send();
 
+  mqtt.subscribe(&configData);
   delay(1000);
 }
 
 unsigned int last_packet_count = 0;
+long delayTime = 0;
+char input[20] = {0};
 
 void loop() {
   my_mdns.loop();
   
   #ifdef DEBUG_STATISTICS
     // Give feedback on the percentage of incoming mDNS packets that fitted in buffer.
+    // Useful for tuning the buffer size to make best use of available memory.
     if (last_packet_count != my_mdns.packet_count && my_mdns.packet_count != 0) {
       last_packet_count = my_mdns.packet_count;
       Serial.print("mDNS decode success rate: ");
@@ -213,15 +230,31 @@ void loop() {
   #endif
 
   MQTT_connect();
+  
+  Adafruit_MQTT_Subscribe *subscription;
+  while ((subscription = mqtt.readSubscription(5000))) {
+    if (subscription == &configData) {
+      Serial.print(F("Got: "));
+      Serial.println((char *)configData.lastread);
+    }
+  }
+  //Serial.println((char *)subscription->lastread);
+  
+  if(delayTime <= 0){
+    Serial.println("Please enter delay time :");
+    
+    while (!Serial.available());
+    for(int i = 0; Serial.available() > 0; ++i){
+      input[i] = (long)Serial.read();
+    }
 
-  Serial.println("Please enter delay time :");
-  //while (!Serial.available());
-  long delayTime = 5000;
-  //long delayTime = Serial.read();
-  Serial.flush();
-  //Serial.println(5000, DEC);
+    delayTime = atoi(input);
+    Serial.print("delay time: ");
+    Serial.println(delayTime);
+  }
+ 
   setTimer(delayTime);
-  //delay(5000);
+  
   DHT.read11(dht_apin);
 
   Serial.print("Current humidity = ");
@@ -241,7 +274,7 @@ void loop() {
 
   publishData.publish(data);
 
-
+  
 
   // ping the server to keep the mqtt connection alive
   // NOT required if you are publishing once every KEEPALIVE seconds
