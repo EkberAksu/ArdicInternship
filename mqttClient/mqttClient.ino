@@ -27,8 +27,6 @@ char AIO_SERVER[100] =  {0};
 
 // Create an ESP8266 WiFiClient class to connect to the MQTT server.
 WiFiClient client;
-// or... use WiFiFlientSecure for SSL
-//WiFiClientSecure client;
 
 // Setup the MQTT client class by passing in the WiFi client and MQTT server and login details.
 Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_CLIENTID, AIO_USERNAME, AIO_KEY);
@@ -63,13 +61,11 @@ String hosts[MAX_HOSTS][4];  // Array containing information about hosts receive
 
 
 // When an mDNS packet gets parsed this callback gets called once per Query.
-// See mdns.h for definition of mdns::Query.
+
 void answerCallback(const mdns::Answer* answer) {
 
   // A typical PTR record matches service to a human readable name.
-  // eg:
-  //  service: _mqtt._tcp.local
-  //  name:    Mosquitto MQTT server on twinkle.local
+
   if (answer->rrtype == MDNS_TYPE_PTR and strstr(answer->name_buffer, QUESTION_SERVICE) != 0) {
     unsigned int i = 0;
     for (; i < MAX_HOSTS; ++i) {
@@ -96,9 +92,7 @@ void answerCallback(const mdns::Answer* answer) {
   }
 
   // A typical SRV record matches a human readable name to port and FQDN info.
-  // eg:
-  //  name:    Mosquitto MQTT server on twinkle.local
-  //  data:    p=0;w=0;port=1883;host=twinkle.local
+
   if (answer->rrtype == MDNS_TYPE_SRV) {
     unsigned int i = 0;
     for (; i < MAX_HOSTS; ++i) {
@@ -128,9 +122,7 @@ void answerCallback(const mdns::Answer* answer) {
   }
 
   // A typical A record matches an FQDN to network ipv4 address.
-  // eg:
-  //   name:    twinkle.local
-  //   address: 192.168.192.9
+
   if (answer->rrtype == MDNS_TYPE_A) {
     for (int i = 0; i < MAX_HOSTS; ++i) {
       if (hosts[i][HOSTS_HOST_NAME] == answer->name_buffer) {
@@ -217,7 +209,7 @@ void loop() {
   
   #ifdef DEBUG_STATISTICS
     // Give feedback on the percentage of incoming mDNS packets that fitted in buffer.
-    // Useful for tuning the buffer size to make best use of available memory.
+
     if (last_packet_count != my_mdns.packet_count && my_mdns.packet_count != 0) {
       last_packet_count = my_mdns.packet_count;
       Serial.print("mDNS decode success rate: ");
